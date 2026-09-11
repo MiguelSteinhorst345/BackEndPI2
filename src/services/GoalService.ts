@@ -11,11 +11,19 @@ export class GoalService {
     ) {
 
         if (!descricao || descricao.trim() === "") {
-            throw new Error("A descrição da meta é obrigatória.");
+            throw new Error(
+                "A descrição da meta é obrigatória."
+            );
         }
 
-        if (!objetivo || objetivo <= 0) {
-            throw new Error("O objetivo deve ser maior que zero.");
+        if (
+            typeof objetivo !== "number" ||
+            !Number.isFinite(objetivo) ||
+            objetivo <= 0
+        ) {
+            throw new Error(
+                "O objetivo deve ser maior que zero."
+            );
         }
 
         const [result]: any = await db.execute(
@@ -32,7 +40,7 @@ export class GoalService {
             VALUES (?, ?, ?, 0, FALSE, ?, ?)`,
             [
                 usuarioId,
-                descricao,
+                descricao.trim(),
                 objetivo,
                 dataInicio || null,
                 dataFim || null
@@ -42,7 +50,7 @@ export class GoalService {
         return {
             id: result.insertId,
             usuario_id: usuarioId,
-            descricao,
+            descricao: descricao.trim(),
             objetivo,
             progresso: 0,
             concluida: false,
@@ -51,7 +59,10 @@ export class GoalService {
         };
     }
 
-    static async findAll(usuarioId: number) {
+
+    static async findAll(
+        usuarioId: number
+    ) {
 
         const [rows]: any = await db.execute(
             `SELECT
@@ -70,6 +81,7 @@ export class GoalService {
 
         return rows;
     }
+
 
     static async findById(
         usuarioId: number,
@@ -97,6 +109,7 @@ export class GoalService {
         return rows;
     }
 
+
     static async update(
         usuarioId: number,
         metaId: number,
@@ -107,11 +120,19 @@ export class GoalService {
     ) {
 
         if (!descricao || descricao.trim() === "") {
-            throw new Error("A descrição da meta é obrigatória.");
+            throw new Error(
+                "A descrição da meta é obrigatória."
+            );
         }
 
-        if (!objetivo || objetivo <= 0) {
-            throw new Error("O objetivo deve ser maior que zero.");
+        if (
+            typeof objetivo !== "number" ||
+            !Number.isFinite(objetivo) ||
+            objetivo <= 0
+        ) {
+            throw new Error(
+                "O objetivo deve ser maior que zero."
+            );
         }
 
         const [result]: any = await db.execute(
@@ -124,7 +145,7 @@ export class GoalService {
              WHERE id = ?
              AND usuario_id = ?`,
             [
-                descricao,
+                descricao.trim(),
                 objetivo,
                 dataInicio || null,
                 dataFim || null,
@@ -134,13 +155,17 @@ export class GoalService {
         );
 
         if (result.affectedRows === 0) {
-            throw new Error("Meta não encontrada.");
+            throw new Error(
+                "Meta não encontrada."
+            );
         }
 
         return {
-            message: "Meta atualizada com sucesso."
+            message:
+                "Meta atualizada com sucesso."
         };
     }
+
 
     static async updateProgress(
         usuarioId: number,
@@ -148,8 +173,14 @@ export class GoalService {
         progresso: number
     ) {
 
-        if (progresso < 0) {
-            throw new Error("O progresso não pode ser negativo.");
+        if (
+            typeof progresso !== "number" ||
+            !Number.isFinite(progresso) ||
+            progresso < 0
+        ) {
+            throw new Error(
+                "O progresso deve ser um número maior ou igual a zero."
+            );
         }
 
         const [metas]: any = await db.execute(
@@ -167,20 +198,26 @@ export class GoalService {
         );
 
         if (metas.length === 0) {
-            throw new Error("Meta não encontrada.");
+            throw new Error(
+                "Meta não encontrada."
+            );
         }
 
-        const objetivo = Number(metas[0].objetivo);
+        const objetivo =
+            Number(metas[0].objetivo);
 
-        let novoProgresso = Number(progresso);
+        let novoProgresso =
+            Number(progresso);
 
         if (novoProgresso > objetivo) {
             novoProgresso = objetivo;
         }
 
+        const jaConcluida =
+            Boolean(metas[0].concluida);
+
         const concluida =
             novoProgresso >= objetivo;
-
 
         await db.execute(
             `UPDATE metas_semanais
@@ -197,33 +234,16 @@ export class GoalService {
             ]
         );
 
+        let pontos = 0;
 
-        // Se completou a meta, adiciona pontos
-        if (
-            concluida &&
-            !Boolean(metas[0].concluida)
-        ) {
+        if (concluida && !jaConcluida) {
 
-            const pontos = 20;
+            pontos = 20;
 
-            await db.execute(
-                `INSERT INTO ranking_produtividade
-                (
-                    usuario_id,
-                    pontuacao
-                )
-                VALUES (?, ?)
-                ON DUPLICATE KEY UPDATE
-                    pontuacao =
-                    pontuacao + VALUES(pontuacao),
-                    ultima_atualizacao =
-                    CURRENT_TIMESTAMP`,
-                [
-                    usuarioId,
-                    pontos
-                ]
+            await this.addProductivityPoints(
+                usuarioId,
+                pontos
             );
-
 
             await db.execute(
                 `INSERT INTO historico_desempenho
@@ -241,7 +261,6 @@ export class GoalService {
                 ]
             );
 
-
             await db.execute(
                 `INSERT INTO notificacoes
                 (
@@ -258,17 +277,22 @@ export class GoalService {
             );
         }
 
-
         return {
             message: concluida
-                ? "Meta concluída! Você ganhou 20 pontos."
+                ? (
+                    pontos > 0
+                        ? "Meta concluída! Você ganhou 20 pontos."
+                        : "A meta já estava concluída."
+                )
                 : "Progresso atualizado com sucesso.",
+
             progresso: novoProgresso,
             objetivo,
             concluida,
-            pontos: concluida ? 20 : 0
+            pontos
         };
     }
+
 
     static async markAsDone(
         usuarioId: number,
@@ -290,21 +314,26 @@ export class GoalService {
         );
 
         if (metas.length === 0) {
-            throw new Error("Meta não encontrada.");
+            throw new Error(
+                "Meta não encontrada."
+            );
         }
 
-        const objetivo = Number(metas[0].objetivo);
-
+        const objetivo =
+            Number(metas[0].objetivo);
 
         if (Boolean(metas[0].concluida)) {
-
             return {
-                message: "A meta já está concluída.",
+                message:
+                    "A meta já está concluída.",
                 concluida: true,
+                progresso: Number(
+                    metas[0].progresso
+                ),
+                objetivo,
                 pontos: 0
             };
         }
-
 
         await db.execute(
             `UPDATE metas_semanais
@@ -320,28 +349,12 @@ export class GoalService {
             ]
         );
 
-
         const pontos = 20;
 
-
-        await db.execute(
-            `INSERT INTO ranking_produtividade
-            (
-                usuario_id,
-                pontuacao
-            )
-            VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE
-                pontuacao =
-                pontuacao + VALUES(pontuacao),
-                ultima_atualizacao =
-                CURRENT_TIMESTAMP`,
-            [
-                usuarioId,
-                pontos
-            ]
+        await this.addProductivityPoints(
+            usuarioId,
+            pontos
         );
-
 
         await db.execute(
             `INSERT INTO historico_desempenho
@@ -359,7 +372,6 @@ export class GoalService {
             ]
         );
 
-
         await db.execute(
             `INSERT INTO notificacoes
             (
@@ -375,7 +387,6 @@ export class GoalService {
             ]
         );
 
-
         return {
             message:
                 "Meta concluída! Você ganhou 20 pontos.",
@@ -385,6 +396,7 @@ export class GoalService {
             pontos
         };
     }
+
 
     static async delete(
         usuarioId: number,
@@ -402,11 +414,40 @@ export class GoalService {
         );
 
         if (result.affectedRows === 0) {
-            throw new Error("Meta não encontrada.");
+            throw new Error(
+                "Meta não encontrada."
+            );
         }
 
         return {
-            message: "Meta excluída com sucesso."
+            message:
+                "Meta excluída com sucesso."
         };
+    }
+
+
+    private static async addProductivityPoints(
+        usuarioId: number,
+        pontos: number
+    ) {
+
+        await db.execute(
+            `INSERT INTO ranking_produtividade
+            (
+                usuario_id,
+                pontuacao,
+                ultima_atualizacao
+            )
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE
+                pontuacao =
+                    pontuacao + VALUES(pontuacao),
+                ultima_atualizacao =
+                    CURRENT_TIMESTAMP`,
+            [
+                usuarioId,
+                pontos
+            ]
+        );
     }
 }

@@ -21,6 +21,7 @@ export class ExamService {
         return materias.length > 0;
     }
 
+
     static async create(
         usuarioId: number,
         materiaId: number,
@@ -67,12 +68,13 @@ export class ExamService {
                     titulo,
                     descricao,
                     data_prova,
+                    nota,
                     realizada
                 )
-                VALUES (?, ?, ?, ?, FALSE)`,
+                VALUES (?, ?, ?, ?, NULL, FALSE)`,
                 [
                     materiaId,
-                    titulo,
+                    titulo.trim(),
                     descricao || null,
                     dataProva
                 ]
@@ -81,13 +83,14 @@ export class ExamService {
         return {
             id: result.insertId,
             materia_id: materiaId,
-            titulo,
+            titulo: titulo.trim(),
             descricao: descricao || null,
             data_prova: dataProva,
             nota: null,
             realizada: false
         };
     }
+
 
     static async findAll(
         usuarioId: number
@@ -114,9 +117,9 @@ export class ExamService {
                 [usuarioId]
             );
 
-
         return rows;
     }
+
 
     static async findById(
         usuarioId: number,
@@ -145,9 +148,9 @@ export class ExamService {
                 ]
             );
 
-
         return rows;
     }
+
 
     static async update(
         usuarioId: number,
@@ -157,6 +160,24 @@ export class ExamService {
         descricao: string | undefined,
         dataProva: string
     ) {
+
+        if (!materiaId) {
+            throw new Error(
+                "A matéria é obrigatória."
+            );
+        }
+
+        if (!titulo || titulo.trim() === "") {
+            throw new Error(
+                "O título da prova é obrigatório."
+            );
+        }
+
+        if (!dataProva) {
+            throw new Error(
+                "A data da prova é obrigatória."
+            );
+        }
 
         const materiaPertence =
             await this.verifySubject(
@@ -184,7 +205,7 @@ export class ExamService {
                  AND m.usuario_id = ?`,
                 [
                     materiaId,
-                    titulo,
+                    titulo.trim(),
                     descricao || null,
                     dataProva,
                     provaId,
@@ -204,13 +225,18 @@ export class ExamService {
         };
     }
 
+
     static async updateGrade(
         usuarioId: number,
         provaId: number,
         nota: number
     ) {
 
-        if (nota < 0 || nota > 10) {
+        if (
+            typeof nota !== "number" ||
+            nota < 0 ||
+            nota > 10
+        ) {
             throw new Error(
                 "A nota deve estar entre 0 e 10."
             );
@@ -255,6 +281,7 @@ export class ExamService {
         };
     }
 
+
     static async markAsDone(
         usuarioId: number,
         provaId: number
@@ -263,7 +290,9 @@ export class ExamService {
         const [provas]: any =
             await db.execute(
                 `SELECT
-                    p.realizada
+                    p.id,
+                    p.realizada,
+                    p.nota
                  FROM provas p
                  INNER JOIN materias m
                     ON p.materia_id = m.id
@@ -281,17 +310,13 @@ export class ExamService {
             );
         }
 
-        const jaRealizada =
-            Boolean(provas[0].realizada);
-
-        if (jaRealizada) {
-
+        if (Boolean(provas[0].realizada)) {
             return {
                 message:
                     "A prova já está marcada como realizada.",
-                realizada: true
+                realizada: true,
+                pontos: 0
             };
-
         }
 
         await db.execute(
@@ -301,20 +326,24 @@ export class ExamService {
             [provaId]
         );
 
+        /*
+         * Prova realizada = 10 pontos.
+         */
         const pontos = 10;
 
         await db.execute(
             `INSERT INTO ranking_produtividade
             (
                 usuario_id,
-                pontuacao
+                pontuacao,
+                ultima_atualizacao
             )
-            VALUES (?, ?)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
             ON DUPLICATE KEY UPDATE
                 pontuacao =
-                pontuacao + VALUES(pontuacao),
+                    pontuacao + VALUES(pontuacao),
                 ultima_atualizacao =
-                CURRENT_TIMESTAMP`,
+                    CURRENT_TIMESTAMP`,
             [
                 usuarioId,
                 pontos
@@ -360,6 +389,7 @@ export class ExamService {
         };
     }
 
+
     static async delete(
         usuarioId: number,
         provaId: number
@@ -379,18 +409,15 @@ export class ExamService {
                 ]
             );
 
-
         if (result.affectedRows === 0) {
             throw new Error(
                 "Prova não encontrada."
             );
         }
 
-
         return {
             message:
                 "Prova excluída com sucesso."
         };
     }
-
 }

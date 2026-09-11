@@ -6,7 +6,6 @@ export class TaskService {
         usuarioId: number,
         materiaId: number
     ) {
-
         const [materias]: any = await db.execute(
             `SELECT id
              FROM materias
@@ -29,7 +28,6 @@ export class TaskService {
         dataEntrega: string | undefined,
         prioridade: string | undefined
     ) {
-
         if (!materiaId) {
             throw new Error(
                 "A matéria é obrigatória."
@@ -50,7 +48,6 @@ export class TaskService {
 
         const prioridadeFinal =
             prioridade || "Média";
-
 
         if (
             !prioridadesPermitidas.includes(
@@ -88,7 +85,7 @@ export class TaskService {
                 VALUES (?, ?, ?, ?, ?, FALSE)`,
                 [
                     materiaId,
-                    titulo,
+                    titulo.trim(),
                     descricao || null,
                     dataEntrega || null,
                     prioridadeFinal
@@ -98,7 +95,7 @@ export class TaskService {
         return {
             id: result.insertId,
             materia_id: materiaId,
-            titulo,
+            titulo: titulo.trim(),
             descricao: descricao || null,
             data_entrega: dataEntrega || null,
             prioridade: prioridadeFinal,
@@ -109,7 +106,6 @@ export class TaskService {
     static async findAll(
         usuarioId: number
     ) {
-
         const [rows]: any =
             await db.execute(
                 `SELECT
@@ -139,7 +135,6 @@ export class TaskService {
         usuarioId: number,
         tarefaId: number
     ) {
-
         const [rows]: any =
             await db.execute(
                 `SELECT
@@ -175,6 +170,11 @@ export class TaskService {
         dataEntrega: string | undefined,
         prioridade: string | undefined
     ) {
+        if (!materiaId) {
+            throw new Error(
+                "A matéria é obrigatória."
+            );
+        }
 
         if (!titulo || titulo.trim() === "") {
             throw new Error(
@@ -197,7 +197,7 @@ export class TaskService {
             )
         ) {
             throw new Error(
-                "Prioridade inválida."
+                "Prioridade inválida. Use Baixa, Média ou Alta."
             );
         }
 
@@ -228,7 +228,7 @@ export class TaskService {
                  AND m.usuario_id = ?`,
                 [
                     materiaId,
-                    titulo,
+                    titulo.trim(),
                     descricao || null,
                     dataEntrega || null,
                     prioridadeFinal,
@@ -253,11 +253,11 @@ export class TaskService {
         usuarioId: number,
         tarefaId: number
     ) {
-
         const [tarefas]: any =
             await db.execute(
                 `SELECT
-                    t.concluida
+                    t.concluida,
+                    t.materia_id
                  FROM tarefas t
                  INNER JOIN materias m
                     ON t.materia_id = m.id
@@ -275,11 +275,7 @@ export class TaskService {
             );
         }
 
-        const jaConcluida =
-            Boolean(tarefas[0].concluida);
-
-        if (jaConcluida) {
-
+        if (Boolean(tarefas[0].concluida)) {
             return {
                 message:
                     "A tarefa já está concluída.",
@@ -307,16 +303,16 @@ export class TaskService {
             `INSERT INTO ranking_produtividade
             (
                 usuario_id,
-                pontuacao
+                pontuacao,
+                ultima_atualizacao
             )
-            VALUES (?, ?)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
             ON DUPLICATE KEY UPDATE
-                pontuacao =
-                pontuacao + VALUES(pontuacao),
-                ultima_atualizacao =
-                CURRENT_TIMESTAMP`,
+                pontuacao = pontuacao + ?,
+                ultima_atualizacao = CURRENT_TIMESTAMP`,
             [
                 usuarioId,
+                pontos,
                 pontos
             ]
         );
@@ -369,7 +365,6 @@ export class TaskService {
         usuarioId: number,
         tarefaId: number
     ) {
-
         const [materias]: any =
             await db.execute(
                 `SELECT
@@ -421,6 +416,9 @@ export class TaskService {
                 (concluidas / total) * 100;
         }
 
+        progresso =
+            Number(progresso.toFixed(2));
+
         await db.execute(
             `UPDATE materias
              SET progresso = ?
@@ -432,13 +430,14 @@ export class TaskService {
                 usuarioId
             ]
         );
+
+        return progresso;
     }
 
     static async delete(
         usuarioId: number,
         tarefaId: number
     ) {
-
         const [result]: any =
             await db.execute(
                 `DELETE t
@@ -458,6 +457,7 @@ export class TaskService {
                 "Tarefa não encontrada."
             );
         }
+
         return {
             message:
                 "Tarefa excluída com sucesso."

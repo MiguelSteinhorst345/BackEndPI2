@@ -3,12 +3,15 @@ import { ProgressService } from "./ProgressService";
 import { NotificationModel } from "../models/Notification";
 
 export class ProductivityService {
-    static readonly PONTOS_TAREFA = 10;
+
+    static readonly PONTOS_TAREFA = 5;
     static readonly PONTOS_PROVA = 20;
+
     static async concluirTarefa(
         usuarioId: number,
         tarefaId: number
     ) {
+
         const [tarefas]: any = await db.execute(
             `SELECT
                 t.id,
@@ -24,51 +27,73 @@ export class ProductivityService {
                 usuarioId
             ]
         );
+
         if (tarefas.length === 0) {
-            throw new Error(
-                "Tarefa não encontrada."
-            );
+            throw new Error("Tarefa não encontrada.");
         }
-        if (tarefas[0].concluida) {
+
+        if (Boolean(tarefas[0].concluida)) {
             return {
                 pontos: 0,
                 progresso: null,
                 mensagem: "Tarefa já estava concluída."
             };
         }
+
         const materiaId = tarefas[0].materia_id;
+
         await db.execute(
             `UPDATE tarefas
-             SET concluida = true
+             SET concluida = TRUE
              WHERE id = ?`,
             [tarefaId]
         );
+
+        const pontos = this.PONTOS_TAREFA;
+
         await this.adicionarPontos(
             usuarioId,
-            this.PONTOS_TAREFA
+            pontos
         );
+
         const progresso =
             await ProgressService.atualizarMateria(
                 materiaId
             );
+
         await NotificationModel.create({
             usuario_id: usuarioId,
             titulo: "Tarefa concluída",
             mensagem:
-                `Parabéns! Você concluiu uma tarefa e ganhou ${this.PONTOS_TAREFA} pontos.`
+                `Parabéns! Você concluiu uma tarefa e ganhou ${pontos} pontos.`
         });
+
         return {
-            pontos: this.PONTOS_TAREFA,
+            pontos,
             progresso,
             mensagem:
                 "Tarefa concluída com sucesso."
         };
     }
+
+
     static async realizarProva(
         usuarioId: number,
         provaId: number,
         nota: number
     ) {
+
+        if (
+            typeof nota !== "number" ||
+            Number.isNaN(nota) ||
+            nota < 0 ||
+            nota > 10
+        ) {
+            throw new Error(
+                "A nota deve estar entre 0 e 10."
+            );
+        }
+
         const [provas]: any = await db.execute(
             `SELECT
                 p.id,
@@ -83,20 +108,23 @@ export class ProductivityService {
                 usuarioId
             ]
         );
+
         if (provas.length === 0) {
             throw new Error(
                 "Prova não encontrada."
             );
         }
-        if (provas[0].realizada) {
+
+        if (Boolean(provas[0].realizada)) {
             return {
                 pontos: 0,
                 mensagem: "Prova já estava realizada."
             };
         }
+
         await db.execute(
             `UPDATE provas
-             SET realizada = true,
+             SET realizada = TRUE,
                  nota = ?
              WHERE id = ?`,
             [
@@ -104,91 +132,102 @@ export class ProductivityService {
                 provaId
             ]
         );
+
+        const pontos = this.PONTOS_PROVA;
+
         await this.adicionarPontos(
             usuarioId,
-            this.PONTOS_PROVA
+            pontos
         );
+
         await NotificationModel.create({
             usuario_id: usuarioId,
             titulo: "Prova realizada",
             mensagem:
-                `Prova registrada com sucesso. Você ganhou ${this.PONTOS_PROVA} pontos.`
+                `Prova registrada com sucesso. Você ganhou ${pontos} pontos.`
         });
+
         return {
-            pontos: this.PONTOS_PROVA,
+            pontos,
+            nota,
             mensagem:
                 "Prova registrada com sucesso."
         };
     }
+
+
     static async adicionarPontos(
         usuarioId: number,
         pontos: number
     ) {
-        const [ranking]: any = await db.execute(
-            `SELECT id, pontuacao
-             FROM ranking_produtividade
-             WHERE usuario_id = ?`,
-            [usuarioId]
+
+        await db.execute(
+            `INSERT INTO ranking_produtividade
+            (
+                usuario_id,
+                pontuacao,
+                ultima_atualizacao
+            )
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE
+                pontuacao = pontuacao + ?,
+                ultima_atualizacao = CURRENT_TIMESTAMP`,
+            [
+                usuarioId,
+                pontos,
+                pontos
+            ]
         );
-        if (ranking.length === 0) {
-            await db.execute(
-                `INSERT INTO ranking_produtividade
-                (usuario_id, pontuacao)
-                VALUES (?, ?)`,
-                [
-                    usuarioId,
-                    pontos
-                ]
-            );
-        } else {
-            await db.execute(
-                `UPDATE ranking_produtividade
-                 SET pontuacao = pontuacao + ?,
-                     ultima_atualizacao = NOW()
-                 WHERE usuario_id = ?`,
-                [
-                    pontos,
-                    usuarioId
-                ]
-            );
-        }
-        await this.atualizarHistorico(usuarioId);
+
+        await this.atualizarHistorico(
+            usuarioId
+        );
     }
+
+
     static async atualizarHistorico(
         usuarioId: number
     ) {
+
         const [tarefas]: any = await db.execute(
-            `SELECT COUNT(*) AS total
+            `SELECT
+                COUNT(*) AS total
              FROM tarefas t
              INNER JOIN materias m
                 ON t.materia_id = m.id
              WHERE m.usuario_id = ?
-             AND t.concluida = true`,
+             AND t.concluida = TRUE`,
             [usuarioId]
         );
+
         const [provas]: any = await db.execute(
-            `SELECT COUNT(*) AS total
+            `SELECT
+                COUNT(*) AS total
              FROM provas p
              INNER JOIN materias m
                 ON p.materia_id = m.id
              WHERE m.usuario_id = ?
-             AND p.realizada = true`,
+             AND p.realizada = TRUE`,
             [usuarioId]
         );
+
         const [ranking]: any = await db.execute(
-            `SELECT pontuacao
+            `SELECT
+                pontuacao
              FROM ranking_produtividade
              WHERE usuario_id = ?`,
             [usuarioId]
         );
+
         const tarefasConcluidas =
-            tarefas[0].total;
+            Number(tarefas[0]?.total || 0);
+
         const provasRealizadas =
-            provas[0].total;
+            Number(provas[0]?.total || 0);
+
         const pontos =
-            ranking.length > 0
-                ? ranking[0].pontuacao
-                : 0;
+            Number(ranking[0]?.pontuacao || 0);
+
         await db.execute(
             `INSERT INTO historico_desempenho
             (
