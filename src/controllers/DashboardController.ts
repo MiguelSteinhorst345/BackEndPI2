@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { DashboardService } from "../services/DashboardService";
-
 export class DashboardController {
 
-    static async get(
+
+    static async getDashboard(
         req: Request,
         res: Response
     ) {
@@ -24,26 +24,9 @@ export class DashboardController {
                 dashboard
             );
 
-        } catch (error: any) {
+        } catch (error) {
 
-            console.error(
-                "Erro ao carregar dashboard:",
-                error
-            );
-
-
-            if (
-                error.message ===
-                "Usuário não encontrado."
-            ) {
-
-                return res.status(404).json({
-                    message:
-                        error.message
-                });
-
-            }
-
+            console.error(error);
 
             return res.status(500).json({
                 message:
@@ -51,7 +34,6 @@ export class DashboardController {
             });
 
         }
-
     }
 
 }

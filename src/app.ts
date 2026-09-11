@@ -1,5 +1,8 @@
 //app.ts é o que faz funcionar
 
+//import profileRoutes from "./routes/profile.routes";
+
+
 import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
@@ -35,4 +38,5 @@ app.use("/notifications", notificationRoutes);
 app.use("/progress", progressRoutes);
 app.use("/productivity", productivityRoutes);
 
+// app.use("/profile", profileRoutes);
 export default app;
