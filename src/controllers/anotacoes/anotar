@@ -1,0 +1,6 @@
+os controllers recebem a requisição 
+ex:
+POST /auth/login
+chega primeiro no controller 
+O controller recebe os dados, valida, chama o Model e devolve a respopsta
+quem responde para o ThunderClint é o Controlller

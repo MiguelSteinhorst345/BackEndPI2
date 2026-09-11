@@ -1,0 +1,8 @@
+Os models conversam como o banco 
+
+ex:UserModel.create executa "INSERT INTO" usuarios 
+
+SubjectModel.getAll
+executa "SELECT * FROM" materias 
+
+os Models nunca respondem ao usuario eles apenas executam consultas 
